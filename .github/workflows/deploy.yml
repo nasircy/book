@@ -38,7 +38,7 @@ jobs:
         run: npm ci # 或 npm install
 
       - name: Build with VitePress
-        run: npm run docs:build # 注意：這裡要對應你 package.json 裡的 build 指令
+        run: npm run build  # 注意：這裡要對應你 package.json 裡的 build 指令
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
