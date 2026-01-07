@@ -47,7 +47,7 @@ const finalSidebar = customizeSidebar(rawSidebar)
 
 export default defineConfig({
  
-  base: '/book', 
+  base: '/', 
   
   title: "Hi Hi Nasir",
   description: "用來記錄的 Nasir 小天地！",
