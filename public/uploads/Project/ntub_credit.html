@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NTUB 學分計算機</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+    <style>
+        /* --- 全局設定：宋體、黑白極簡 --- */
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --border-color: #000000;
+            --hover-bg: #f2f2f2;
+            --checked-bg: #000000;
+            --checked-text: #ffffff;
+        }
+
+        body {
+            font-family: "Songti SC", "SimSun", "STSong", "Noto Serif TC", serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1, h2, h3 {
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin: 0;
+        }
+
+        /* --- 登入遮罩層 --- */
+        #login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .login-card {
+            border: 1px solid var(--border-color);
+            padding: 3rem 2rem;
+            text-align: center;
+            width: 90%;
+            max-width: 350px;
+            box-shadow: 4px 4px 0px rgba(0,0,0,1); /* 硬陰影風格 */
+        }
+
+        .login-card h2 {
+            font-size: 1.6rem;
+            margin-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border-color);
+            display: inline-block;
+            padding-bottom: 5px;
+        }
+
+        .login-card p {
+            font-size: 0.9rem;
+            color: #555;
+            margin-bottom: 2rem;
+        }
+
+        .btn-google {
+            background-color: #fff;
+            color: #000;
+            border: 1px solid #000;
+            padding: 12px 20px;
+            font-family: inherit;
+            font-size: 1rem;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+
+        .btn-google:hover {
+            background-color: #000;
+            color: #fff;
+        }
+
+        /* --- 主介面容器 --- */
+        #app-container {
+            display: none;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* --- 頂部 Header --- */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 3px double var(--border-color);
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+        }
+
+        #user-display {
+            font-size: 0.8rem;
+            display: block;
+            margin-top: 5px;
+            color: #666;
+        }
+
+        .btn-logout {
+            background: none;
+            border: 1px solid var(--border-color);
+            padding: 5px 15px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .btn-logout:hover {
+            background: #000;
+            color: #fff;
+        }
+
+        /* --- 儀表板 (Dashboard) --- */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            text-align: center;
+            background: #fff;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            font-weight: bold;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+            margin-bottom: 5px;
+        }
+
+        .stat-val {
+            font-size: 2rem;
+            font-weight: bold;
+            line-height: 1.2;
+        }
+
+        .stat-sub {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* 畢業判定狀態樣式 */
+        .status-pass { text-decoration: underline double; }
+        .status-fail { color: #000; }
+
+        /* --- 課程區塊 (手風琴效果) --- */
+        .section-card {
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            background: #fff;
+            transition: all 0.3s ease;
+        }
+
+        .section-header {
+            padding: 15px 20px;
+            background: #f9f9f9;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid transparent; /* 預設隱藏分隔線 */
+            user-select: none;
+        }
+        
+        /* 展開時顯示分隔線 */
+        .section-card.open .section-header {
+            border-bottom: 1px solid var(--border-color);
+            background: #fff;
+        }
+        
+        .section-card.open {
+            box-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+        /* 折疊指示箭頭 */
+        .toggle-icon::after {
+            content: '+';
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        .section-card.open .toggle-icon::after {
+            content: '-';
+        }
+
+        /* 課程網格容器 */
+        .course-grid {
+            display: none; /* 預設折疊 */
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: -1px; /* 邊框重疊 */
+        }
+
+        .section-card.open .course-grid {
+            display: grid;
+            padding: 1px 0 0 0;
+        }
+
+        /* --- 課程項目 Checkbox --- */
+        .course-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            border-right: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+            position: relative;
+        }
+
+        .course-item:hover {
+            background-color: var(--hover-bg);
+        }
+
+        /* 選中狀態 - 黑底白字 */
+        .course-item.checked {
+            background-color: var(--checked-bg);
+            color: var(--checked-text);
+        }
+        
+        .course-item.checked .c-meta {
+            color: #ccc;
+        }
+
+        /* 隱藏原生 checkbox，用樣式取代 */
+        .course-item input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 1px solid var(--border-color);
+            margin-right: 12px;
+            margin-top: 4px;
+            flex-shrink: 0;
+            display: grid;
+            place-content: center;
+            background: #fff;
+        }
+
+        .course-item input[type="checkbox"]::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            transform: scale(0);
+            background-color: #000;
+            transition: 120ms transform ease-in-out;
+        }
+
+        .course-item input[type="checkbox"]:checked::before {
+            transform: scale(1);
+        }
+        
+        /* 當外層變黑底時，checkbox 變白框黑點 */
+        .course-item.checked input[type="checkbox"] {
+            border-color: #fff;
+        }
+        .course-item.checked input[type="checkbox"]::before {
+            background-color: #000; 
+        }
+
+        .c-info { flex: 1; }
+        .c-name { display: block; font-weight: bold; font-size: 1rem; }
+        .c-meta { font-size: 0.8rem; color: #666; margin-top: 2px; }
+
+        /* 標籤 (簡約版) */
+        .badge {
+            font-size: 0.7rem;
+            border: 1px solid currentColor;
+            padding: 0 4px;
+            margin-left: 5px;
+            border-radius: 2px;
+            vertical-align: text-top;
+        }
+
+        /* --- 提示訊息 (Toast) --- */
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #fff;
+            color: #000;
+            border: 2px solid #000;
+            padding: 10px 20px;
+            font-weight: bold;
+            display: none;
+            z-index: 1000;
+            box-shadow: 4px 4px 0px #000;
+        }
+
+        /* --- 響應式設計 (Mobile Friendly) --- */
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: repeat(2, 1fr); /* 手機上變 2x2 */
+            }
+
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .btn-logout {
+                width: 100%;
+                text-align: center;
+            }
+
+            .course-grid {
+                grid-template-columns: 1fr; /* 手機上單欄 */
+            }
+            
+            .course-item {
+                border-right: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-overlay">
+        <div class="login-card">
+            <h2>NTUB 學分計算機</h2>
+            <p>資訊管理系 (技優領航專班)</p>
+            
+            <button class="btn-google" onclick="doLogin()">
+                <svg width="18" height="18" viewBox="0 0 24 24" style="margin-right:10px;">
+                    <path fill="#000" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
+                </svg>
+                Google 帳號登入
+            </button>
+            <div id="auth-error" style="color:red; margin-top:10px; font-size:0.8rem;"></div>
+        </div>
+    </div>
+
+    <div id="app-container">
+        <header>
+            <div>
+                <h1>NTUB 學分計算機</h1>
+                <span id="user-display"></span>
+            </div>
+            <button class="btn-logout" onclick="doLogout()">登出系統</button>
+        </header>
+
+        <div class="dashboard">
+            <div class="stat-card">
+                <div class="stat-label">目前總學分</div>
+                <div class="stat-val" id="val-total">0</div>
+                <div class="stat-sub">目標：128</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">專業選修</div>
+                <div class="stat-val" id="val-ele">0</div>
+                <div class="stat-sub">目標：33</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">必修進度</div>
+                <div class="stat-val" id="val-req">0%</div>
+                <div class="stat-sub">含通識/院訂</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">畢業判定</div>
+                <div class="stat-val" id="val-status" style="font-size:1.5rem">未通過</div>
+                <div class="stat-sub" id="val-msg">--</div>
+            </div>
+        </div>
+
+        <div id="course-container"></div>
+
+        <div class="section-card" id="section-other">
+            <div class="section-header" onclick="toggleSection('section-other')">
+                <span class="section-title">其他畢業門檻 (0學分)</span>
+                <span class="toggle-icon"></span>
+            </div>
+            <div class="course-grid">
+                <label class="course-item">
+                    <input type="checkbox" id="req_pe" onchange="calculate()">
+                    <div class="c-info">
+                        <span class="c-name">體育 (一~三年級)</span>
+                        <span class="c-meta">必修但0學分</span>
+                    </div>
+                </label>
+                <label class="course-item">
+                    <input type="checkbox" id="req_mil" onchange="calculate()">
+                    <div class="c-info">
+                        <span class="c-name">全民國防教育軍事訓練</span>
+                        <span class="c-meta">必修但0學分</span>
+                    </div>
+                </label>
+                <label class="course-item">
+                    <input type="checkbox" id="req_service" onchange="calculate()">
+                    <div class="c-info">
+                        <span class="c-name">服務學習課程</span>
+                        <span class="c-meta">需修習一門</span>
+                    </div>
+                </label>
+                <label class="course-item">
+                    <input type="checkbox" id="req_english" onchange="calculate()">
+                    <div class="c-info">
+                        <span class="c-name">英語能力檢定</span>
+                        <span class="c-meta">通過檢定或修畢校內英語訓練</span>
+                    </div>
+                </label>
+                <label class="course-item">
+                    <input type="checkbox" id="req_ethics" onchange="calculate()">
+                    <div class="c-info">
+                        <span class="c-name">學術倫理教育</span>
+                        <span class="c-meta">通過核心單元測驗</span>
+                    </div>
+                </label>
+                <label class="course-item">
+                    <input type="checkbox" id="req_pro" onchange="calculate()">
+                    <div class="c-info">
+                        <span class="c-name">專業能力門檻</span>
+                        <span class="c-meta">符合系上證照點數規定</span>
+                    </div>
+                </label>
+                <label class="course-item">
+                    <input type="checkbox" id="req_program" onchange="calculate()">
+                    <div class="c-info">
+                        <span class="c-name">學分學程</span>
+                        <span class="c-meta">需修畢一個學程(含微學程)</span>
+                    </div>
+                </label>
+            </div>
+        </div>
+        
+    </div>
+
+    <div id="toast">已同步</div>
+
+    <script>
+        // --- 1. Firebase 設定 ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDDwebeN_plmKg2-N34s8Xw1DmGRqYEG2M",
+            authDomain: "iamnasirlin.firebaseapp.com",
+            databaseURL: "https://iamnasirlin-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "iamnasirlin",
+            storageBucket: "iamnasirlin.firebasestorage.app",
+            messagingSenderId: "725940977300",
+            appId: "1:725940977300:web:698531b7de8af3b5e87e81",
+            measurementId: "G-NJ4BQV6DMG"
+        };
+
+        // 初始化 Firebase
+        try {
+            firebase.initializeApp(firebaseConfig);
+        } catch (e) {
+            console.error("Firebase Error:", e);
+        }
+
+        const auth = firebase.auth();
+        const db = firebase.database();
+        let currentUser = null;
+
+        // --- 2. 課程資料庫 (保持不變) ---
+        const courses = [
+            // 通識必修
+            { id: "gen_chi1", name: "大學國文選(一)", credit: 2, cat: "req", section: "通識與校訂必修" },
+            { id: "gen_chi2", name: "大學國文選(二)", credit: 2, cat: "req", section: "通識與校訂必修" },
+            { id: "gen_chi_prac", name: "實用中文與實作", credit: 2, cat: "req", section: "通識與校訂必修", note: "大一必修" },
+            { id: "gen_eng1", name: "英文(一)", credit: 2, cat: "req", section: "通識與校訂必修" },
+            { id: "gen_eng2", name: "英文(二)", credit: 2, cat: "req", section: "通識與校訂必修" },
+            { id: "gen_eng3", name: "英文(三)", credit: 2, cat: "req", section: "通識與校訂必修" },
+            { id: "gen_sus", name: "永續發展", credit: 2, cat: "req", section: "通識與校訂必修" },
+            { id: "gen_art", name: "生活美學", credit: 2, cat: "req", section: "通識與校訂必修" },
+            { id: "gen_glo", name: "國際視野", credit: 2, cat: "req", section: "通識與校訂必修" },
+            { id: "gen_soc", name: "社會融合", credit: 2, cat: "req", section: "通識與校訂必修" },
+            { id: "gen_ele1", name: "博雅選修(一)", credit: 2, cat: "req", section: "通識與校訂必修", note: "跨域" },
+            { id: "gen_ele2", name: "博雅選修(二)", credit: 2, cat: "req", section: "通識與校訂必修", note: "跨域" },
+            { id: "gen_ele3", name: "博雅選修(三)", credit: 2, cat: "req", section: "通識與校訂必修", note: "跨域" },
+            { id: "uni_bus", name: "現代商業概論", credit: 2, cat: "req", section: "通識與校訂必修" },
+
+            // 院訂必修
+            { id: "col_mgt", name: "管理學", credit: 3, cat: "req", section: "院訂必修 (21學分)" },
+            { id: "col_acc", name: "會計學", credit: 3, cat: "req", section: "院訂必修 (21學分)" },
+            { id: "col_cs", name: "計算機概論", credit: 3, cat: "req", section: "院訂必修 (21學分)" },
+            { id: "col_py1", name: "Python程式設計(一)", credit: 3, cat: "req", section: "院訂必修 (21學分)" },
+            { id: "col_py2", name: "Python程式設計(二)", credit: 3, cat: "req", section: "院訂必修 (21學分)" },
+            { id: "col_eco", name: "經濟學", credit: 3, cat: "req", section: "院訂必修 (21學分)" },
+            { id: "col_stat", name: "統計學(一)", credit: 3, cat: "req", section: "院訂必修 (21學分)" },
+
+            // 專業必修
+            { id: "core_cal", name: "微積分(一)", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_fin", name: "財務管理(一)", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_law", name: "資訊倫理與法律", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_db", name: "資料庫管理", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_iot", name: "物聯網與雲端運算", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_ds", name: "資料結構", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_math", name: "管理數學", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_mis", name: "管理資訊系統", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_ec", name: "電子商務與網路行銷", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_big", name: "社群大數據分析", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_os", name: "作業系統", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_sec", name: "資訊安全", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_mob", name: "行動商務應用", credit: 3, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_trend", name: "資訊科技趨勢", credit: 2, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_eng", name: "科技英文導讀", credit: 2, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_pj1", name: "資管實務專題一", credit: 1, cat: "req", section: "專業必修 (46學分)" },
+            { id: "core_pj2", name: "資管實務專題二", credit: 2, cat: "req", section: "專業必修 (46學分)" },
+
+            // 專業選修
+            { id: "ele_web", name: "網頁設計", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_cal2", name: "微積分(二)", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_mkt", name: "行銷管理", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_net", name: "資訊網路", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_prog1", name: "程式設計(一)", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_prog2", name: "程式設計(二)", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_java", name: "Java程式設計", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_dblab", name: "資料庫系統實作", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_ooad", name: "物件導向系統分析", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_linux", name: "Linux", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_linux2", name: "Linux伺服器架設", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_webapp", name: "Web應用程式設計", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_ui", name: "使用者介面設計", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_viz", name: "資料可視化", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_pm", name: "專案管理", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_ml", name: "機器學習與深度學習", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_ai", name: "人工智慧應用實務", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_chain", name: "區塊鏈實務", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_ecops", name: "網路商城經營", credit: 3, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)" },
+            { id: "ele_intern", name: "校外實習", credit: 4, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)", note: "4學分" },
+            { id: "ele_micro", name: "微學分課程", credit: 2, cat: "ele", tag: "tech", section: "專業選修 (需滿33學分)", note: "上限2" },
+            
+            // 財金類選修
+            { id: "ele_fintro", name: "財金概論", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_money", name: "貨幣銀行學", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_fin2", name: "財務管理(二)", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_intacc", name: "中級會計學(一)", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_tax", name: "所得稅法規", credit: 4, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_inv", name: "投資學", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_claw", name: "商事法", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_bank", name: "銀行業務", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_fininst", name: "金融機構與市場", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_fs", name: "財務報表分析", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_stat2", name: "統計學(二)", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_fut", name: "期貨與選擇權", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_tax2", name: "財產稅法規", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_fintech", name: "金融科技導論", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_bigfin", name: "大數據金融", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_audit", name: "審計學", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" },
+            { id: "ele_caudit", name: "電腦審計", credit: 3, cat: "ele", tag: "fin", section: "專業選修 (需滿33學分)" }
+        ];
+
+        // --- 3. 程式邏輯 ---
+
+        // 初始化渲染課程 (含折疊邏輯)
+        function renderCourses() {
+            const container = document.getElementById('course-container');
+            container.innerHTML = '';
+            
+            const sections = [...new Set(courses.map(c => c.section))];
+            
+            sections.forEach((secName, index) => {
+                // 建立卡片容器
+                const card = document.createElement('div');
+                card.className = 'section-card';
+                // 預設第一個展開，其他折疊
+                if(index === 0) card.classList.add('open');
+                
+                const cardId = `section-${index}`;
+                card.id = cardId;
+
+                // 標題 (可點擊折疊)
+                const header = document.createElement('div');
+                header.className = 'section-header';
+                header.onclick = () => toggleSection(cardId);
+                header.innerHTML = `
+                    <span class="section-title">${secName}</span>
+                    <span class="toggle-icon"></span>
+                `;
+                card.appendChild(header);
+
+                // 網格
+                const grid = document.createElement('div');
+                grid.className = 'course-grid';
+                
+                courses.filter(c => c.section === secName).forEach(c => {
+                    let badges = '';
+                    if(c.tag === 'tech') badges = '<span class="badge">資</span>';
+                    if(c.tag === 'fin') badges = '<span class="badge">財</span>';
+
+                    const label = document.createElement('label');
+                    label.className = 'course-item';
+                    label.innerHTML = `
+                        <input type="checkbox" id="${c.id}" data-credit="${c.credit}" data-cat="${c.cat}" onchange="calculate()">
+                        <div class="c-info">
+                            <span class="c-name">${c.name} ${badges}</span>
+                            <span class="c-meta">${c.credit}學分 ${c.note ? ` ${c.note}` : ''}</span>
+                        </div>
+                    `;
+                    grid.appendChild(label);
+                });
+                
+                card.appendChild(grid);
+                container.appendChild(card);
+            });
+        }
+
+        // 折疊切換功能
+        function toggleSection(id) {
+            const el = document.getElementById(id);
+            if(el) el.classList.toggle('open');
+        }
+
+        // --- Auth 邏輯 (Google Only) ---
+
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('user-display').innerText = `User: ${user.email}`;
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('app-container').style.display = 'block';
+                loadUserData();
+            } else {
+                currentUser = null;
+                document.getElementById('app-container').style.display = 'none';
+                document.getElementById('login-overlay').style.display = 'flex';
+                
+                // 清空狀態
+                document.querySelectorAll('input[type="checkbox"]').forEach(box => {
+                    box.checked = false;
+                    box.parentElement.classList.remove('checked');
+                });
+                resetStats();
+            }
+        });
+
+        function doLogin() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider)
+                .catch((error) => {
+                    console.error(error);
+                    document.getElementById('auth-error').innerText = "登入失敗: " + error.message;
+                });
+        }
+
+        function doLogout() {
+            auth.signOut();
+        }
+
+        // 計算並自動儲存
+        function calculate(save = true) {
+            let total = 0;
+            let ele = 0;
+            let req = 0;
+            let checkedIds = [];
+
+            document.querySelectorAll('input[type="checkbox"]').forEach(box => {
+                if(box.checked) {
+                    checkedIds.push(box.id);
+                    box.parentElement.classList.add('checked');
+                    
+                    if(box.dataset.credit) {
+                        const cr = parseInt(box.dataset.credit);
+                        total += cr;
+                        if(box.dataset.cat === 'ele') ele += cr;
+                        else req += cr;
+                    }
+                } else {
+                    box.parentElement.classList.remove('checked');
+                }
+            });
+
+            // 更新儀表板
+            document.getElementById('val-total').innerText = total;
+            document.getElementById('val-ele').innerText = ele;
+            
+            // 必修粗估分母 95
+            let reqPct = Math.round((req / 95) * 100);
+            if(reqPct > 100) reqPct = 100;
+            document.getElementById('val-req').innerText = reqPct + "%";
+
+            // 畢業判定
+            const req_pe = document.getElementById('req_pe').checked;
+            const req_mil = document.getElementById('req_mil').checked;
+            const req_service = document.getElementById('req_service').checked;
+            const req_english = document.getElementById('req_english').checked;
+            const req_ethics = document.getElementById('req_ethics').checked;
+            const req_pro = document.getElementById('req_pro').checked;
+            const req_program = document.getElementById('req_program').checked;
+            const allReqs = req_pe && req_mil && req_service && req_english && req_ethics && req_pro && req_program;
+
+            const statusEl = document.getElementById('val-status');
+            const msgEl = document.getElementById('val-msg');
+            
+            if(total >= 128 && ele >= 33 && allReqs) {
+                statusEl.innerText = "恭喜通過";
+                statusEl.className = "stat-val status-pass";
+                msgEl.innerText = "符合畢業資格";
+            } else {
+                statusEl.innerText = "未通過";
+                statusEl.className = "stat-val status-fail";
+                let msg = [];
+                if(total < 128) msg.push(`差${128-total}學分`);
+                if(ele < 33) msg.push(`選修差${33-ele}`);
+                if(!allReqs) msg.push("門檻未滿");
+                msgEl.innerText = msg.length > 0 ? msg.join("/") : "檢查中";
+            }
+
+            if(save && currentUser) {
+                saveUserData(checkedIds);
+            }
+        }
+
+        function resetStats() {
+            document.getElementById('val-total').innerText = '0';
+            document.getElementById('val-ele').innerText = '0';
+            document.getElementById('val-req').innerText = '0%';
+            document.getElementById('val-status').innerText = '未通過';
+            document.getElementById('val-status').className = 'stat-val';
+            document.getElementById('val-msg').innerText = '--';
+        }
+
+        // --- Firebase 資料流 ---
+        function saveUserData(checkedIds) {
+            const toast = document.getElementById('toast');
+            toast.style.display = 'block';
+            toast.innerText = '同步中...';
+
+            db.ref('ntubcredit/' + currentUser.uid).set({
+                checked: checkedIds,
+                email: currentUser.email,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            }).then(() => {
+                toast.innerText = '已同步';
+                setTimeout(() => toast.style.display = 'none', 1500);
+            }).catch(err => {
+                console.error(err);
+                toast.innerText = '同步失敗';
+            });
+        }
+
+        function loadUserData() {
+            const toast = document.getElementById('toast');
+            toast.style.display = 'block';
+            toast.innerText = '讀取中...';
+
+            db.ref('ntubcredit/' + currentUser.uid).once('value').then(snapshot => {
+                const data = snapshot.val();
+                if(data && data.checked) {
+                    data.checked.forEach(id => {
+                        const el = document.getElementById(id);
+                        if(el) el.checked = true;
+                    });
+                    calculate(false);
+                    toast.innerText = '讀取完成';
+                } else {
+                    toast.innerText = '歡迎使用';
+                }
+                setTimeout(() => toast.style.display = 'none', 1500);
+            });
+        }
+
+        // 啟動
+        renderCourses();
+
+    </script>
+</body>
+</html>
